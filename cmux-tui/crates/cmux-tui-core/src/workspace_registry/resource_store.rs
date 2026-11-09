@@ -2685,6 +2685,7 @@ pub(super) fn repair_dangling_terminal_resources(
     );
 
     for public_id in &dangling {
+        tombstone_terminal_tabs(transaction, public_id, sqlite_revision)?;
         transaction.execute(
             "UPDATE resource_terminals
              SET lifecycle = 'tombstoned', updated_revision = ?1, deleted_revision = ?1
@@ -3710,6 +3711,17 @@ fn tombstone_resource_tab_row(
     tombstone_resource_identity(transaction, tab_id, revision)
 }
 
+fn tombstone_terminal_tabs(
+    transaction: &Transaction<'_>,
+    public_id: &str,
+    revision: i64,
+) -> anyhow::Result<()> {
+    for tab in live_tabs_for_content(transaction, public_id)? {
+        tombstone_resource_tab_row(transaction, &tab, revision)?;
+    }
+    Ok(())
+}
+
 fn tombstone_resource_terminal(
     transaction: &Transaction<'_>,
     public_id: &str,
@@ -3733,10 +3745,7 @@ fn tombstone_resource_terminal(
     {
         anyhow::bail!("terminal_incarnation_mismatch");
     }
-    let tabs = live_tabs_for_content(transaction, public_id)?;
-    for tab in tabs {
-        tombstone_resource_tab_row(transaction, &tab, revision)?;
-    }
+    tombstone_terminal_tabs(transaction, public_id, revision)?;
     transaction.execute(
         "UPDATE resource_terminals
          SET lifecycle = 'tombstoned', updated_revision = ?1, deleted_revision = ?1
